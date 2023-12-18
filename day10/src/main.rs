@@ -1,6 +1,9 @@
+use std::collections::HashSet;
+use crate::PipeType::{Ground, Vertical};
+
 mod input;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum PipeType {
     Vertical(char),
     Horizontal(char),
@@ -41,7 +44,7 @@ fn match_to_pipe_type(c: char) -> PipeType {
 
 fn check_next_pipe_direction(x: usize, y: usize, prev_x: usize, prev_y: usize, pipe_grid: &PipeGrid) -> (usize, usize) {
     // get the pipe at x,y
-    let pipe = &pipe_grid.pipes[x][y];
+    let pipe = &pipe_grid.pipes[y][x];
     match pipe {
         PipeType::Vertical(c) => {
             if prev_y < y {
@@ -59,39 +62,81 @@ fn check_next_pipe_direction(x: usize, y: usize, prev_x: usize, prev_y: usize, p
         },
         PipeType::NorthEast(c) => {
             if x + 1 == prev_x {
-                (x, y + 1)
+                (x, y - 1)
             } else {
                 (x + 1, y)
             }
         },
         PipeType::NorthWest(c) => {
             if x - 1 == prev_x {
-                (x, y + 1)
+                (x, y - 1)
             } else {
                 (x - 1, y)
             }
         },
         PipeType::SouthWest(c) => {
-            if x + 1 == prev_x {
-                (x, y - 1)
-            } else {
-                (x + 1, y)
-            }
-        },
-        PipeType::SouthEast(c) => {
             if x - 1 == prev_x {
-                (x, y - 1)
+                (x, y + 1)
             } else {
                 (x - 1, y)
             }
         },
-        PipeType::StartingPosition(c) => (x + 1, y),
+        PipeType::SouthEast(c) => {
+            if x + 1 == prev_x {
+                (x, y + 1)
+            } else {
+                (x + 1, y)
+            }
+        },
+        PipeType::StartingPosition(c) => {
+            println!("Starting position!");
+            (x + 1, y)
+        },
         _ => panic!("This shouldn't be here!")
     }
 }
 
 fn main() {
-    let pipe_grid = parse_input(input::example_input);
+    let mut pipe_grid = parse_input(input::input);
+    let hashset = part_one(&pipe_grid);
+    pipe_grid = clean_map(pipe_grid, &hashset);
+    part_two(&pipe_grid);
+}
+
+fn clean_map(mut pipe_grid: PipeGrid, hashset: &HashSet<(usize, usize)>) -> PipeGrid {
+    let pipes_cleaned = pipe_grid.pipes.into_iter()
+        .enumerate()
+        .map(|(row_idx, line)| {
+            line.into_iter()
+                .enumerate()
+                .map(|(col_idx, tile)| match tile {
+                    pipe if hashset.contains(&(col_idx, row_idx)) => pipe,
+                    _ => Ground('.'),
+                })
+                .collect()
+        })
+        .collect::<Vec<Vec<PipeType>>>();
+    pipe_grid.pipes = pipes_cleaned;
+    pipe_grid
+}
+
+fn part_two(pipe_grid: &PipeGrid) {
+    let mut inside = false;
+    let count = &pipe_grid.pipes.iter()
+        .flatten()
+        .filter(|tile| match tile {
+            Ground(c) => inside,
+            PipeType::Vertical(c) | PipeType::NorthWest(c) | PipeType::NorthEast(c) => {
+                inside = !inside;
+                false
+            }
+            _ => false,
+        })
+        .count();
+    println!("{:?}", count);
+}
+
+fn part_one(pipe_grid: &PipeGrid) -> HashSet<(usize, usize)> {
     //println!("Pipe Grid: {:?}", pipe_grid);
     // find the x,y coordinate of the starting position
     let mut starting_position = (0, 0);
@@ -99,23 +144,34 @@ fn main() {
         for (y, pipe) in row.iter().enumerate() {
             match pipe {
                 PipeType::StartingPosition(c) => {
-                    starting_position = (x, y);
+                    starting_position = (y, x);
                 },
                 _ => ()
             }
         }
     }
-    println!("Pipe Grid: {:?}", pipe_grid);
+    //println!("Pipe Grid: {:?}", pipe_grid);
     println!("Starting Position: {:?}", starting_position);
     let mut current_position = starting_position;
     let mut prev_x = 0;
     let mut prev_y = 0;
+    let mut total_pipes = 0;
+    let mut hashset: HashSet<(usize,usize)> = HashSet::new();
     loop {
+        hashset.insert((current_position.0, current_position.1));
         let next_position = check_next_pipe_direction(current_position.0, current_position.1, prev_x, prev_y, &pipe_grid);
+        if pipe_grid.pipes[next_position.1][next_position.0] == PipeType::StartingPosition('S') {
+            println!("Reached the end of the pipe!");
+            println!("Total Pipes: {:?}", total_pipes);
+            break;
+        }
         prev_x = current_position.0;
         prev_y = current_position.1;
 
         current_position = next_position;
-        println!("Current Position: {:?}, Previous Position: {:?}, Current Pipe: {:?}, Previous Pipe: {:?}", current_position, (prev_x, prev_y), pipe_grid.pipes[current_position.0][current_position.1], pipe_grid.pipes[prev_x][prev_y]);
+        total_pipes += 1;
+        println!("Current Position: {:?}, Previous Position: {:?}, Current Pipe: {:?}, Previous Pipe: {:?}", current_position, (prev_x, prev_y), pipe_grid.pipes[current_position.1][current_position.0], pipe_grid.pipes[prev_y][prev_x]);
     }
+
+    hashset
 }
