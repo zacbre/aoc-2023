@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use workflows::{Step, Workflow};
 use crate::part::Part;
 use crate::workflows::{Operand, Var, Workflows};
@@ -22,7 +23,7 @@ fn parse(input: &str) -> (Workflows, Vec<Part>) {
             continue;
         }
         if !parts {
-            let mut workflow = Workflow::parse_workflow(line);
+            let workflow = Workflow::parse_workflow(line);
             //println!("Workflow: {:?}", workflow);
             workflows.add_workflow(workflow);
             continue;
@@ -100,12 +101,153 @@ fn run(workflows: &Workflows, parts: &Vec<Part>) -> Vec<(Part, bool)> {
     passed
 }
 
+#[derive(Debug, Clone)]
+struct Range {
+    x: (i64, i64),
+    m: (i64, i64),
+    a: (i64, i64),
+    s: (i64, i64),
+}
+
+fn split_range(range: Range, rating: Var, op: Operand, value: i64) -> (Option<Range>, Option<Range>) {
+    let mut result1 = range.clone();
+    let mut result2 = range.clone();
+    match (rating, op) {
+        (Var::X, Operand::Less) => {
+            let (low, high) = range.x;
+            if high < value {
+                return (Some(range), None);
+            }
+            if low >= value {
+                return (None, Some(range));
+            }
+            result1.x = (low, value - 1);
+            result2.x = (value, high);
+            (Some(result1), Some(result2))
+        }
+        (Var::X, Operand::Greater) => {
+            let (low, high) = range.x;
+            if low > value {
+                return (Some(range), None);
+            }
+            if high <= value {
+                return (None, Some(range));
+            }
+            result1.x = (value + 1, high);
+            result2.x = (low, value);
+            (Some(result1), Some(result2))
+        }
+        (Var::M, Operand::Less) => {
+            let (low, high) = range.m;
+            if high < value {
+                return (Some(range), None);
+            }
+            if low >= value {
+                return (None, Some(range));
+            }
+            result1.m = (low, value - 1);
+            result2.m = (value, high);
+            (Some(result1), Some(result2))
+        }
+        (Var::M, Operand::Greater) => {
+            let (low, high) = range.m;
+            if low > value {
+                return (Some(range), None);
+            }
+            if high <= value {
+                return (None, Some(range));
+            }
+            result1.m = (value + 1, high);
+            result2.m = (low, value);
+            (Some(result1), Some(result2))
+        }
+        (Var::A, Operand::Less) => {
+            let (low, high) = range.a;
+            if high < value {
+                return (Some(range), None);
+            }
+            if low >= value {
+                return (None, Some(range));
+            }
+            result1.a = (low, value - 1);
+            result2.a = (value, high);
+            (Some(result1), Some(result2))
+        }
+        (Var::A, Operand::Greater) => {
+            let (low, high) = range.a;
+            if low > value {
+                return (Some(range), None);
+            }
+            if high <= value {
+                return (None, Some(range));
+            }
+            result1.a = (value + 1, high);
+            result2.a = (low, value);
+            (Some(result1), Some(result2))
+        }
+        (Var::S, Operand::Less) => {
+            let (low, high) = range.s;
+            if high < value {
+                return (Some(range), None);
+            }
+            if low >= value {
+                return (None, Some(range));
+            }
+            result1.s = (low, value - 1);
+            result2.s = (value, high);
+            (Some(result1), Some(result2))
+        }
+        (Var::S, Operand::Greater) => {
+            let (low, high) = range.s;
+            if low > value {
+                return (Some(range), None);
+            }
+            if high <= value {
+                return (None, Some(range));
+            }
+            result1.s = (value + 1, high);
+            result2.s = (low, value);
+            (Some(result1), Some(result2))
+        }
+        _ => (None, None),
+    }
+}
+
+fn find_range(range: Range, current: &str, workflows: &HashMap<String, Workflow>) -> i64 {
+    if current == "R" {
+        return 0;
+    }
+    if current == "A" {
+        return (range.x.1 - range.x.0 + 1)
+            * (range.m.1 - range.m.0 + 1)
+            * (range.a.1 - range.a.0 + 1)
+            * (range.s.1 - range.s.0 + 1);
+    }
+    let workflow = workflows.get(current).unwrap();
+    let mut curr_range = Some(range);
+    let mut total = 0;
+    for step in workflow.steps.iter() {
+        if let Some(r) = curr_range {
+            let (matching, not_matching) = split_range(r, step.var_to_check, step.operand, step.value_to_check as i64);
+            if let Some(m) = matching {
+                total += find_range(m, step.next_workflow.clone().unwrap().as_str(), workflows);
+            }
+            curr_range = not_matching;
+        }
+    }
+    if let Some(r) = curr_range {
+        total += find_range(r, workflow.next_workflow.clone().unwrap().as_str(), workflows);
+    }
+    total
+}
+
 #[cfg(test)]
 mod tests {
     use std::thread::available_parallelism;
     use rayon::iter::IntoParallelIterator;
     use rayon::iter::IndexedParallelIterator;
     use rayon::iter::ParallelIterator;
+    use crate::{find_range, Range};
 
     #[test]
     fn can_parse_example_input() {
@@ -151,33 +293,16 @@ mod tests {
     fn part_two() {
         let parsed = super::parse(super::input::INPUT);
         let workflow = &parsed.0.get_workflow("in").unwrap();
-        // make ranges happen
-        //4000 / cores
-        let range = 4000 / available_parallelism().unwrap().get();
-        let total_passed_parts: usize = (0..available_parallelism().unwrap().get()).into_par_iter().map(|i| {
-            println!("Starting thread: {:?}", i);
-            let start = i * range;
-            let end = start + range;
-            let passed_parts: usize = (start..end).into_par_iter().map(|x| {
-                (0..4000).into_par_iter().map(|m| {
-                    let val = (0..4000).into_par_iter().map(|a| {
-                        (0..4000).into_par_iter().map(|s| {
-                            let result = super::run_workflow(&parsed.0, workflow, x, m, a, s);
-                            if result.0 {
-                                1
-                            } else {
-                                0
-                            }
-                        }).sum::<usize>()
-                    }).sum::<usize>();
-                    println!("Thread {:?} finished another round, x: {}, m: {}", i, x, m);
-                    val
-                }).sum::<usize>()
-            }).sum::<usize>();
-
-            println!("Thread {:?} finished: {:?}", i, passed_parts);
-            passed_parts
-        }).sum();
-        println!("Total passed parts: {:?}", total_passed_parts);
+        let total = find_range(
+            Range {
+                x: (1, 4000),
+                m: (1, 4000),
+                a: (1, 4000),
+                s: (1, 4000),
+            },
+            "in",
+            &parsed.0.workflows
+        );
+        println!("{}", total)
     }
 }

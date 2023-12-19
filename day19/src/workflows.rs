@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Copy)]
 pub enum Var {
@@ -15,7 +16,7 @@ impl Var {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Operand{
     Greater,
     Less
@@ -23,13 +24,14 @@ pub enum Operand{
 
 #[derive(Debug)]
 pub struct Workflows {
-    pub(crate) workflows: Vec<Workflow>,
+    pub(crate) workflows: HashMap<String, Workflow>,
 }
 
 #[derive(Debug)]
 pub struct Workflow {
     pub name: String,
-    pub steps: Vec<Step>
+    pub steps: Vec<Step>,
+    pub next_workflow: Option<String>
 }
 
 impl Workflow {
@@ -48,6 +50,7 @@ impl Workflow {
         Workflow {
             name,
             steps,
+            next_workflow
         }
     }
 
@@ -103,15 +106,15 @@ impl Step {
 impl Workflows {
     pub fn new() -> Workflows {
         Workflows {
-            workflows: Vec::new(),
+            workflows: HashMap::new(),
         }
     }
 
     pub fn add_workflow(&mut self, workflow: Workflow) {
-        self.workflows.push(workflow);
+        self.workflows.insert(workflow.name.clone(), workflow);
     }
 
     pub fn get_workflow(&self, name: &str) -> Option<&Workflow> {
-        self.workflows.iter().find(|w| w.name == name)
+        self.workflows.get(name)
     }
 }
