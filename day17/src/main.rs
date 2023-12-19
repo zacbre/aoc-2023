@@ -110,7 +110,7 @@ mod tests {
         let input = parse(input::INPUT);
         let start = Pos::new();
         let answer = find_path(&start, &input, 0, 3);
-        //draw_to_image(&input, Path::new("example.png"), Some(&answer.0));
+        //draw_to_image(&input, Path::new("part1_path.png"), Some(&answer.0));
         assert_eq!(answer.1, 1260);
     }
 
