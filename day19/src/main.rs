@@ -1,6 +1,6 @@
 use workflows::{Step, Workflow};
 use crate::part::Part;
-use crate::workflows::{Operand, Workflows};
+use crate::workflows::{Operand, Var, Workflows};
 
 use rayon::prelude::*;
 use rayon::iter::ParallelIterator;
@@ -34,20 +34,25 @@ fn parse(input: &str) -> (Workflows, Vec<Part>) {
     (workflows, parts_list)
 }
 
-fn run_workflow(workflows: &Workflows, workflow: &Workflow, parts: &Part) -> (bool, Option<String>) {
+fn run_workflow(workflows: &Workflows, workflow: &Workflow, x: usize, m: usize, a: usize, s: usize) -> (bool, Option<String>) {
     //println!("{:?}", workflow.steps);
     for (index, step) in workflow.steps.iter().enumerate() {
         if step.is_only_next_workflow && step.next_workflow != Some("A".to_string()) && step.next_workflow != Some("R".to_string()) {
             //println!("Is last workflow, moving on to next one: {:?}", step.next_workflow);
             let next_workflow = workflows.get_workflow(step.next_workflow.as_ref().unwrap()).unwrap();
-            return run_workflow(workflows, next_workflow, parts);
+            return run_workflow(workflows, next_workflow, x, m, a, s);
         }
 
-        let part_value = parts.parts.get(&step.var_to_check).unwrap();
+        let part_value = match step.var_to_check {
+            Var::X => x,
+            Var::M => m,
+            Var::A => a,
+            Var::S => s,
+        };
         //println!("Workflow: {}, Step: {}, Part: {:?}, Part Value: {:?}, Operand: {:?}, To Check: {:?}", workflow.name, index+1, step.var_to_check, part_value, step.operand, step.value_to_check);
         let is_true = match step.operand {
-            Operand::Greater => part_value > &step.value_to_check,
-            Operand::Less => part_value < &step.value_to_check,
+            Operand::Greater => part_value > step.value_to_check,
+            Operand::Less => part_value < step.value_to_check,
         };
         //println!("Part Value: {:?}, Is True: {:?}", part_value, is_true);
         if is_true {
@@ -66,7 +71,7 @@ fn run_workflow(workflows: &Workflows, workflow: &Workflow, parts: &Part) -> (bo
                     match next_workflow {
                         Some(next_workflow) => {
                             //println!("Running next workflow: {:?}", next_workflow);
-                            return run_workflow(workflows, next_workflow, parts);
+                            return run_workflow(workflows, next_workflow, x, m, a, s);
                         }
                         None => {
                             panic!("Workflow {:?} not found!", next_workflow);
@@ -84,7 +89,12 @@ fn run(workflows: &Workflows, parts: &Vec<Part>) -> Vec<(Part, bool)> {
     let mut passed: Vec<(Part, bool)> = Vec::new();
     for part in parts {
         // find the first workflow
-        let result = run_workflow(&workflows, &workflows.get_workflow("in").unwrap(), &part);
+        let x = part.parts.get(&Var::X).unwrap();
+        let m = part.parts.get(&Var::M).unwrap();
+        let a = part.parts.get(&Var::A).unwrap();
+        let s = part.parts.get(&Var::S).unwrap();
+
+        let result = run_workflow(&workflows, &workflows.get_workflow("in").unwrap(), *x, *m, *a, *s);
         passed.push((part.clone(), result.0));
     }
     passed
@@ -92,6 +102,7 @@ fn run(workflows: &Workflows, parts: &Vec<Part>) -> Vec<(Part, bool)> {
 
 #[cfg(test)]
 mod tests {
+    use std::thread::available_parallelism;
     use rayon::iter::IntoParallelIterator;
     use rayon::iter::ParallelIterator;
     use crate::part::Part;
@@ -140,31 +151,32 @@ mod tests {
     fn part_two() {
         let parsed = super::parse(super::input::INPUT);
         let workflow = &parsed.0.get_workflow("in").unwrap();
-        let passed_parts: usize = (0..4000).into_par_iter().map(|x| {
-            (0..4000).into_par_iter().map(|m| {
-                (0..4000).into_par_iter().map(|a| {
-                    (0..4000).into_par_iter().map(|s| {
-                        let part = Part {
-                            parts: vec![
-                                (super::workflows::Var::X, x),
-                                (super::workflows::Var::M, m),
-                                (super::workflows::Var::A, a),
-                                (super::workflows::Var::S, s),
-                            ].into_iter().collect(),
-                        };
-                        let result = super::run_workflow(&parsed.0, workflow, &part);
-                        if result.0 {
-                            1
-                        } else {
-                            0
-                        }
+        // make ranges happen
+        //4000 / cores
+        let range = 4000 / available_parallelism().unwrap().get();
+        let mut total_passed_parts = 0;
+        for i in 0..available_parallelism().unwrap().get() {
+            println!("Starting thread: {:?}", i);
+            let start = i * range;
+            let end = start + range;
+            let passed_parts: usize = (start..end).into_par_iter().map(|x| {
+                (0..4000).into_par_iter().map(|m| {
+                    (0..4000).into_par_iter().map(|a| {
+                        (0..4000).into_par_iter().map(|s| {
+                            let result = super::run_workflow(&parsed.0, workflow, x, m, a, s);
+                            if result.0 {
+                                1
+                            } else {
+                                0
+                            }
+                        }).sum::<usize>()
                     }).sum::<usize>()
                 }).sum::<usize>()
-            }).sum::<usize>()
-        }).sum::<usize>();
+            }).sum::<usize>();
 
-
-        println!("Answer: {:?}", passed_parts);
-        assert_eq!(passed_parts, 0);
+            println!("Thread {:?} finished: {:?}", i, passed_parts);
+            total_passed_parts += passed_parts;
+        }
+        println!("Total passed parts: {:?}", total_passed_parts);
     }
 }
