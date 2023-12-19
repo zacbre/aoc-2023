@@ -80,7 +80,7 @@ fn run_workflow(workflows: &Workflows, workflow: &Workflow, x: usize, m: usize, 
                 }
             };
         }
-        println!("Moving on to next step...");
+        //println!("Moving on to next step...");
     }
     (false, None)
 }
@@ -104,8 +104,8 @@ fn run(workflows: &Workflows, parts: &Vec<Part>) -> Vec<(Part, bool)> {
 mod tests {
     use std::thread::available_parallelism;
     use rayon::iter::IntoParallelIterator;
+    use rayon::iter::IndexedParallelIterator;
     use rayon::iter::ParallelIterator;
-    use crate::part::Part;
 
     #[test]
     fn can_parse_example_input() {
@@ -154,14 +154,13 @@ mod tests {
         // make ranges happen
         //4000 / cores
         let range = 4000 / available_parallelism().unwrap().get();
-        let mut total_passed_parts = 0;
-        for i in 0..available_parallelism().unwrap().get() {
+        let total_passed_parts: usize = (0..available_parallelism().unwrap().get()).into_par_iter().map(|i| {
             println!("Starting thread: {:?}", i);
             let start = i * range;
             let end = start + range;
             let passed_parts: usize = (start..end).into_par_iter().map(|x| {
                 (0..4000).into_par_iter().map(|m| {
-                    (0..4000).into_par_iter().map(|a| {
+                    let val = (0..4000).into_par_iter().map(|a| {
                         (0..4000).into_par_iter().map(|s| {
                             let result = super::run_workflow(&parsed.0, workflow, x, m, a, s);
                             if result.0 {
@@ -170,13 +169,15 @@ mod tests {
                                 0
                             }
                         }).sum::<usize>()
-                    }).sum::<usize>()
+                    }).sum::<usize>();
+                    println!("Thread {:?} finished another round, x: {}, m: {}", i, x, m);
+                    val
                 }).sum::<usize>()
             }).sum::<usize>();
 
             println!("Thread {:?} finished: {:?}", i, passed_parts);
-            total_passed_parts += passed_parts;
-        }
+            passed_parts
+        }).sum();
         println!("Total passed parts: {:?}", total_passed_parts);
     }
 }
