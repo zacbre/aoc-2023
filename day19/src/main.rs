@@ -293,6 +293,7 @@ mod tests {
     fn part_two() {
         let parsed = super::parse(super::input::INPUT);
         let workflow = &parsed.0.get_workflow("in").unwrap();
+<<<<<<< Updated upstream
         let total = find_range(
             Range {
                 x: (1, 4000),
@@ -304,5 +305,35 @@ mod tests {
             &parsed.0.workflows
         );
         println!("{}", total)
+=======
+        // make ranges happen
+        //4000 / cores
+        let range = 4000 / available_parallelism().unwrap().get();
+        let total_passed_parts: usize = (0..available_parallelism().unwrap().get()).into_par_iter().map(|i| {
+            println!("Starting thread: {:?}", i);
+            let start = i * range;
+            let end = start + range;
+            let passed_parts: usize = (start..end).into_par_iter().map(|x| {
+                (0..4000).into_par_iter().map(|m| {
+                    let val = (0..4000).into_par_iter().map(|a| {
+                        (0..4000).into_par_iter().map(|s| {
+                            //let result = super::run_workflow(&parsed.0, workflow, x, m, a, s);
+                            //if result.0 {
+                                1
+                            //} else {
+                            //    0
+                            //}
+                        }).sum::<usize>()
+                    }).sum::<usize>();
+                    //println!("Thread {:?} finished another round, x: {}, m: {}", i, x, m);
+                    val
+                }).sum::<usize>()
+            }).sum::<usize>();
+
+            println!("Thread {:?} finished: {:?}", i, passed_parts);
+            passed_parts
+        }).sum();
+        println!("Total passed parts: {:?}", total_passed_parts);
+>>>>>>> Stashed changes
     }
 }
